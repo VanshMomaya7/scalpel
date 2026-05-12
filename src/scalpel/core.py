@@ -9,6 +9,7 @@ from typing import Optional, Union
 import libcst as cst
 from libcst import FlattenSentinel, RemovalSentinel
 
+from scalpel.measure import blast_radius, patch_locality, token_cost
 from scalpel.types import EditResult
 
 __all__ = [
@@ -162,6 +163,9 @@ def edit_function_body(
     new_tree = tree.visit(replacer)
     new_source = new_tree.code
     diff = _make_diff(source, new_source, file_path)
+    br = blast_radius(source, new_source)
+    pl = patch_locality(diff, len(new_source.splitlines()))
+    tc = token_cost(source + function_name + new_body, diff)
     pathlib.Path(file_path).write_text(new_source, encoding="utf-8")
 
     return EditResult(
@@ -169,9 +173,9 @@ def edit_function_body(
         syntax_valid=True,
         diff=diff,
         error=None,
-        blast_radius=None,
-        patch_locality=None,
-        token_cost=None,
+        blast_radius=br,
+        patch_locality=pl,
+        token_cost=tc,
     )
 
 
@@ -223,6 +227,9 @@ def edit_class_method(
     new_tree = tree.visit(replacer)
     new_source = new_tree.code
     diff = _make_diff(source, new_source, file_path)
+    br = blast_radius(source, new_source)
+    pl = patch_locality(diff, len(new_source.splitlines()))
+    tc = token_cost(source + class_name + method_name + new_body, diff)
     pathlib.Path(file_path).write_text(new_source, encoding="utf-8")
 
     return EditResult(
@@ -230,9 +237,9 @@ def edit_class_method(
         syntax_valid=True,
         diff=diff,
         error=None,
-        blast_radius=None,
-        patch_locality=None,
-        token_cost=None,
+        blast_radius=br,
+        patch_locality=pl,
+        token_cost=tc,
     )
 
 

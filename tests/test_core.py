@@ -130,16 +130,18 @@ def test_edit_function_body_preserves_signature(tmp_path: pytest.TempPathFactory
     assert "return 'b'" in after
 
 
-def test_edit_function_body_metrics_none_on_success(
+def test_edit_function_body_metrics_populated_on_success(
     tmp_path: pytest.TempPathFactory,
 ) -> None:
     f = tmp_path / "mod.py"  # type: ignore[operator]
     f.write_text("def foo():\n    return 1\n", encoding="utf-8")  # type: ignore[union-attr]
     result = edit_function_body(str(f), "foo", "    return 2\n")
     assert result.success is True
-    assert result.blast_radius is None
-    assert result.patch_locality is None
-    assert result.token_cost is None
+    assert result.blast_radius == 0.0  # body change only, signature unchanged
+    assert result.patch_locality is not None
+    assert 0.0 <= result.patch_locality <= 1.0
+    assert result.token_cost is not None
+    assert result.token_cost > 0
 
 
 # ── edit_class_method ─────────────────────────────────────────────────────────
