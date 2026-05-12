@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "scalpel"
+version = "0.1.0"
+description = "AST-based editing primitives for Python with built-in measurement"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "libcst>=1.8.6",
+    "mcp>=1.27.1",
+    "tiktoken>=0.12.0",
+]
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6.152.6",
+    "mypy>=2.1.0",
+    "pytest>=9.0.3",
+    "ruff>=0.15.12",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/scalpel"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+strict = true
+mypy_path = "src"
+
+[tool.ruff]
+src = ["src"]
