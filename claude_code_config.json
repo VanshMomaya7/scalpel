@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "scalpel": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "scalpel.server"],
+      "cwd": "."
+    }
+  }
+}
