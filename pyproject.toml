@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "scalpel-mcp"
-version = "0.1.1"
+version = "0.1.2"
 description = "Surgical AST-based Python editing for AI agents — edit by symbol name, not text position. Built-in blast radius and token cost on every edit."
 readme = "README.md"
 license = { text = "MIT" }
