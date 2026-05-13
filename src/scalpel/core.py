@@ -255,8 +255,18 @@ def _sig_first_line(node: cst.FunctionDef | cst.ClassDef) -> str:
     return lines[0] if lines else node.name.value
 
 
+def _sig_compact(node: cst.FunctionDef | cst.ClassDef) -> str:
+    """Compact label: 'fn name(params) -> ret' or 'async fn …' or 'cls Name'."""
+    if isinstance(node, cst.ClassDef):
+        return f"cls {node.name.value}"
+    sig = _sig_first_line(node).rstrip(":")
+    if sig.startswith("async def "):
+        return "async fn " + sig[len("async def "):]
+    return "fn " + sig[len("def "):]
+
+
 def read_structure(file_path: str) -> str:
-    """Return top-level functions/classes with signatures and line ranges, plain text."""
+    """Return top-level functions/classes with compact signatures and line ranges."""
     source = pathlib.Path(file_path).read_text(encoding="utf-8")
     tree = cst.parse_module(source)
     wrapper = MetadataWrapper(tree)
@@ -266,15 +276,15 @@ def read_structure(file_path: str) -> str:
     for stmt in wrapper.module.body:
         if isinstance(stmt, cst.FunctionDef):
             rng = positions[stmt]
-            out.append(f"{_sig_first_line(stmt)}  # L{rng.start.line}-{rng.end.line}")
+            out.append(f"{_sig_compact(stmt)}  L{rng.start.line}-{rng.end.line}")
         elif isinstance(stmt, cst.ClassDef):
             rng = positions[stmt]
-            out.append(f"{_sig_first_line(stmt)}  # L{rng.start.line}-{rng.end.line}")
+            out.append(f"{_sig_compact(stmt)}  L{rng.start.line}-{rng.end.line}")
             for item in stmt.body.body:
                 if isinstance(item, cst.FunctionDef):
                     mr = positions[item]
                     out.append(
-                        f"  {_sig_first_line(item)}  # L{mr.start.line}-{mr.end.line}"
+                        f"  {_sig_compact(item)}  L{mr.start.line}-{mr.end.line}"
                     )
 
     return "\n".join(out) if out else "(empty file)"

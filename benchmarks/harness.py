@@ -11,7 +11,7 @@ import libcst as cst
 import tiktoken
 from libcst.metadata import MetadataWrapper, PositionProvider
 
-from scalpel.core import edit_class_method, edit_function_body, measure_edit
+from scalpel.core import edit_class_method, edit_function_body, measure_edit, read_structure
 
 TASKS_DIR = pathlib.Path(__file__).parent / "tasks"
 RESULTS_DIR = pathlib.Path(__file__).parent / "results"
@@ -21,6 +21,15 @@ _enc = tiktoken.get_encoding("cl100k_base")
 
 
 # ── data types ────────────────────────────────────────────────────────────────
+
+
+@dataclass
+class MultiEditRow:
+    file: str
+    n_edits: int
+    str_replace_tokens: int
+    scalpel_tokens: int
+    reduction_pct: float
 
 
 @dataclass
@@ -116,7 +125,8 @@ def run_str_replace(
     new_source = source.replace(full_fn_text, new_full, 1)
     success = (full_fn_text in source) and (new_source != source)
 
-    input_t = _t(source + body_text + new_body)
+    # Each component tokenised separately — models receive them as distinct inputs
+    input_t = _t(source) + _t(body_text) + _t(new_body)
     output_t = _t(new_source)
     return Row(
         file="",
@@ -227,6 +237,58 @@ def run_measure(path: pathlib.Path, source: str, sym: Symbol, new_body: str) -> 
     )
 
 
+# ── multi-edit scenario ───────────────────────────────────────────────────────
+
+
+def multi_edit_stats(
+    path: pathlib.Path, source: str, symbols: list[Symbol], n: int = 5
+) -> MultiEditRow:
+    """Cost of n sequential edits: str_replace pays full file each time; scalpel pays structure once."""
+    selected = symbols[:n]
+    struct_tokens = _t(read_structure(str(path)))
+
+    str_replace_total = 0
+    scalpel_edit_total = 0
+    for sym in selected:
+        _, body_text = extract_texts(source, sym)
+        new_body = make_new_body(body_text)
+        fn_id = f"{sym.class_name}.{sym.fn_name}" if sym.class_name else sym.fn_name
+
+        str_replace_total += _t(source) + _t(body_text) + _t(new_body)
+        scalpel_edit_total += _t(fn_id) + _t(new_body)
+
+    scalpel_total = struct_tokens + scalpel_edit_total
+    reduction = 100.0 * (str_replace_total - scalpel_total) / str_replace_total if str_replace_total else 0.0
+    return MultiEditRow(
+        file=path.name,
+        n_edits=len(selected),
+        str_replace_tokens=str_replace_total,
+        scalpel_tokens=scalpel_total,
+        reduction_pct=reduction,
+    )
+
+
+def print_multi_edit_summary(multi_rows: list[MultiEditRow]) -> None:
+    n = multi_rows[0].n_edits if multi_rows else 5
+    col_w = 28
+    header = (
+        f"{'Multi-edit (' + str(n) + ' edits / file)':<{col_w}}| "
+        f"{'str_replace total':>18} | {'scalpel total':>14} | {'Reduction':>10}"
+    )
+    sep = "-" * len(header)
+    print(sep)
+    print(header)
+    print(sep)
+    avg_sr = sum(r.str_replace_tokens for r in multi_rows) / len(multi_rows)
+    avg_sc = sum(r.scalpel_tokens for r in multi_rows) / len(multi_rows)
+    avg_red = sum(r.reduction_pct for r in multi_rows) / len(multi_rows)
+    print(
+        f"{'avg across ' + str(len(multi_rows)) + ' files':<{col_w}}| "
+        f"{avg_sr:>18.0f} | {avg_sc:>14.0f} | {avg_red:>9.1f}%"
+    )
+    print(sep)
+
+
 # ── summary printer ───────────────────────────────────────────────────────────
 
 
@@ -280,7 +342,18 @@ def main() -> None:
         print("No task files found in", TASKS_DIR, file=sys.stderr)
         sys.exit(1)
 
+    # Fix 2: print read_structure token count (compact format) vs full file
+    rep = task_files[0]
+    rep_source = rep.read_text(encoding="utf-8")
+    struct_out = read_structure(str(rep))
+    full_t = _t(rep_source)
+    struct_t = _t(struct_out)
+    print(f"\nread_structure token comparison ({rep.name}):")
+    print(f"  full file content:  {full_t:>5} tokens")
+    print(f"  read_structure out: {struct_t:>5} tokens  ({full_t / struct_t:.1f}x reduction)")
+
     all_rows: list[Row] = []
+    multi_rows: list[MultiEditRow] = []
 
     for task_path in task_files:
         source = task_path.read_text(encoding="utf-8")
@@ -299,6 +372,8 @@ def main() -> None:
                 row.file = file_label
                 all_rows.append(row)
 
+        multi_rows.append(multi_edit_stats(task_path, source, symbols))
+
     # Write CSV
     fieldnames = [f.name for f in Row.__dataclass_fields__.values()]  # type: ignore[attr-defined]
     with RESULTS_CSV.open("w", newline="", encoding="utf-8") as fh:
@@ -311,6 +386,8 @@ def main() -> None:
     total_fns = len(all_rows) // 3
     print(f"Benchmarked {len(task_files)} files, {total_fns} functions/methods\n")
     print_summary(all_rows)
+    print()
+    print_multi_edit_summary(multi_rows)
 
 
 if __name__ == "__main__":
