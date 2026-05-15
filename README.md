@@ -55,6 +55,8 @@ pip install tokenspace-mcp
 tokenspace install-skill
 ```
 
+[![tokenspace-mcp on PyPI](docs/images/pypi-package.png)](https://pypi.org/project/tokenspace-mcp/)
+
 Then restart Claude Code. Tokenspace tools will be available automatically.
 
 The second command:
